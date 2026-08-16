@@ -3,15 +3,28 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>基金股票监控（云端版）</title>
+<title>基金股票监控（云端完整版）</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: "Microsoft YaHei", sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
   .header { padding: 14px 20px; background: #1e293b; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #334155; flex-wrap: wrap; gap: 8px; }
   .header h1 { font-size: 18px; }
-  .header .meta { font-size: 12px; color: #94a3b8; }
+  .header .meta { font-size: 12px; color: #94a3b8; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .header .meta b { color: #38bdf8; }
+  .btn { padding: 6px 12px; border-radius: 8px; border: none; cursor: pointer; background: #334155; color: #e2e8f0; font-size: 12px; }
+  .btn:hover { background: #475569; }
+  .btn.primary { background: #0ea5e9; color: #fff; }
+  .btn.primary:hover { background: #0284c7; }
+  .btn.danger { background: rgba(239,68,68,.15); color: #ef4444; }
+  .login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: radial-gradient(ellipse at top, #1e293b 0%, #0f172a 60%); }
+  .login-box { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 28px 32px; width: 360px; }
+  .login-box h1 { font-size: 19px; text-align: center; margin-bottom: 6px; }
+  .login-box .sub { text-align: center; color: #64748b; font-size: 13px; margin-bottom: 18px; }
+  .login-box input { width: 100%; padding: 10px 12px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; font-size: 13px; outline: none; box-sizing: border-box; }
+  .login-box .btn { width: 100%; padding: 10px; font-size: 14px; }
+  .login-error { display: none; background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.5); color: #f87171; font-size: 13px; padding: 8px 12px; border-radius: 8px; margin-bottom: 12px; text-align: center; }
+  .app-screen { display: none; }
   .market-bar { display: flex; gap: 10px; padding: 12px 20px; flex-wrap: wrap; }
   .idx-card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 8px 14px; min-width: 130px; flex: 1 1 130px; }
   .idx-name { font-size: 12px; color: #94a3b8; }
@@ -24,7 +37,7 @@
   .container { display: flex; gap: 14px; padding: 0 20px 20px; flex-wrap: wrap; }
   .chart-panel { flex: 1 1 620px; background: #1e293b; border-radius: 12px; padding: 14px; border: 1px solid #334155; min-width: 300px; }
   .chart-title { font-size: 14px; margin-bottom: 8px; }
-  #fund-chart, #stock-chart { width: 100%; height: 380px; }
+  #fund-chart, #stock-chart { width: 100%; height: 360px; }
   .predict-bar { font-size: 12px; padding: 8px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; margin-bottom: 10px; }
   .predict-bar .tag { color: #f59e0b; font-weight: 700; margin-right: 6px; }
   .predict-bar b { color: #38bdf8; }
@@ -38,11 +51,15 @@
   .item .code { font-size: 11px; color: #64748b; }
   .item .val { text-align: right; font-size: 15px; font-weight: 700; }
   .item .pct { text-align: right; font-size: 12px; min-width: 58px; }
+  .item .del { border: none; background: none; color: #64748b; cursor: pointer; font-size: 14px; }
+  .item .del:hover { color: #ef4444; }
+  .add-row { display: flex; gap: 6px; margin-top: 10px; }
+  .add-row input { flex: 1; padding: 6px 10px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; font-size: 12px; outline: none; min-width: 0; }
   .news-panel { margin-top: 14px; }
   .news-panel h2 { font-size: 14px; margin-bottom: 10px; }
   .news-filter { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
   .news-filter input { flex: 1 1 150px; padding: 5px 10px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; font-size: 12px; outline: none; }
-  .news-list { max-height: 400px; overflow-y: auto; }
+  .news-list { max-height: 380px; overflow-y: auto; }
   .news-item { padding: 7px 10px; border-radius: 8px; cursor: pointer; font-size: 12px; line-height: 1.5; color: #cbd5e1; border-bottom: 1px solid #263449; }
   .news-item:hover { background: #273449; }
   .news-item.hot { background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.4); }
@@ -53,12 +70,45 @@
   .loading { color: #94a3b8; text-align: center; padding: 20px 0; font-size: 13px; }
   .tab-panel { display: none; }
   .tab-panel.active { display: block; }
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; align-items: center; justify-content: center; z-index: 100; }
+  .modal-box { background: #1e293b; border: 1px solid #334155; border-radius: 14px; width: 640px; max-width: 92vw; max-height: 84vh; overflow-y: auto; padding: 20px; }
+  .modal-box h2 { margin-bottom: 12px; font-size: 16px; }
+  .modal-close { float: right; background: none; border: none; color: #94a3b8; font-size: 20px; cursor: pointer; }
+  .u-card { border: 1px solid #334155; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; background: #0f172a; }
+  .u-card .u-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .u-card .u-name { font-weight: 700; }
+  .u-card .u-funds { font-size: 12px; color: #94a3b8; margin-top: 3px; }
 </style>
 </head>
 <body>
+
+<!-- 登录页 -->
+<div class="login-screen" id="login-screen">
+  <div class="login-box">
+    <h1>💰 基金 &amp; 股票 监控</h1>
+    <div class="sub">使用 GitHub 账号登录（输入你的 GitHub Token）</div>
+    <div id="login-error" class="login-error"></div>
+    <input id="token-input" type="password" placeholder="GitHub Personal Access Token"
+           onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="btn primary" onclick="doLogin()">登 录</button>
+    <div class="tip" style="margin-top:10px;">
+      Token 创建方法：GitHub → Settings → Developer settings → Personal access tokens → Generate（勾选 repo + workflow 权限）<br>
+      Token 仅保存在你自己的浏览器本地，不会上传到任何服务器
+    </div>
+  </div>
+</div>
+
+<!-- 主界面 -->
+<div class="app-screen" id="app-screen">
 <div class="header">
-  <h1>💰 基金 &amp; 股票 监控（云端）</h1>
-  <div class="meta">数据更新：<b id="update-time">--</b> · 每 15-30 分钟自动刷新</div>
+  <h1>💰 基金 &amp; 股票 监控</h1>
+  <div class="meta">
+    <span>👤 <b id="cur-user"></b></span>
+    <span id="admin-btn" style="display:none;"><button class="btn" onclick="openAdmin()">👥 用户管理</button></span>
+    <span>数据更新：<b id="update-time">--</b></span>
+    <button class="btn primary" onclick="forceUpdate()">🔄 立即更新数据</button>
+    <button class="btn" onclick="doLogout()">退出</button>
+  </div>
 </div>
 
 <div class="market-bar" id="market-bar"><div class="loading">大盘加载中...</div></div>
@@ -76,16 +126,18 @@
       <div id="fund-chart"></div>
       <div class="news-panel">
         <h2>📰 财经新闻</h2>
-        <div class="news-filter">
-          <input id="news-kw" type="text" placeholder="关键词筛选（空格分隔）" oninput="renderNews()">
-        </div>
+        <div class="news-filter"><input id="news-kw" type="text" placeholder="关键词筛选（空格分隔）" oninput="renderNews()"></div>
         <div class="news-list" id="news-list"><div class="loading">加载中...</div></div>
       </div>
     </div>
     <div class="list-panel">
       <h2>我的基金（<span id="fund-count">0</span>）</h2>
       <div id="fund-list"><div class="loading">加载中...</div></div>
-      <div class="tip">点击基金查看净值走势 + 明日预测<br>数据更新频率：15-30 分钟（自动）</div>
+      <div class="add-row">
+        <input id="fund-add" type="text" placeholder="6位基金代码，如 001480" maxlength="6" onkeydown="if(event.key==='Enter')addFund()">
+        <button class="btn primary" onclick="addFund()">添加</button>
+      </div>
+      <div class="tip">添加/删除后自动保存到你的云端列表，15分钟内更新行情</div>
     </div>
   </div>
 </div>
@@ -99,16 +151,177 @@
     <div class="list-panel">
       <h2>我的股票（<span id="stock-count">0</span>）</h2>
       <div id="stock-list"><div class="loading">加载中...</div></div>
+      <div class="add-row">
+        <input id="stock-add" type="text" placeholder="股票代码，如 600519 / sz000001" onkeydown="if(event.key==='Enter')addStock()">
+        <button class="btn primary" onclick="addStock()">添加</button>
+      </div>
     </div>
   </div>
 </div>
+</div>
+
+<!-- 用户管理弹窗 -->
+<div class="modal" id="admin-modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeAdmin()">✕</button>
+    <h2>👥 用户管理</h2>
+    <div id="admin-users"><div class="loading">加载中...</div></div>
+  </div>
+</div>
+
+<div id="toast" style="position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#334155;color:#e2e8f0;padding:10px 20px;border-radius:8px;font-size:13px;display:none;z-index:999;"></div>
 
 <script>
+// ===== 配置 =====
+const OWNER = 'china1240695852-source';
+const REPO = 'fund-monitor';
+const GH_API = 'https://api.github.com';
+const PAGE_URL = 'data.json';
+
 let data = null;
 let fundChart = null;
 let stockChart = null;
 let selectedFund = null;
 let selectedStock = null;
+let myFunds = [];
+let myStocks = [];
+
+function toast(msg, isErr) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  t.style.background = isErr ? '#7f1d1d' : '#334155';
+  clearTimeout(t._t);
+  t._t = setTimeout(() => { t.style.display = 'none'; }, 3000);
+}
+
+function getToken() { return localStorage.getItem('gh_token'); }
+function getUser() { return localStorage.getItem('gh_user'); }
+
+// ===== GitHub API =====
+async function gh(path, opts) {
+  const res = await fetch(GH_API + path, Object.assign({
+    headers: {
+      'Authorization': 'Bearer ' + getToken(),
+      'Accept': 'application/vnd.github+json',
+      'Content-Type': 'application/json'
+    }
+  }, opts || {}));
+  const txt = await res.text();
+  let j = null;
+  try { j = JSON.parse(txt); } catch (e) { j = txt; }
+  return { status: res.status, body: j };
+}
+
+async function getRepoFile(path) {
+  const r = await gh('/repos/' + OWNER + '/' + REPO + '/contents/' + path);
+  if (r.status === 200 && r.body.content) {
+    return { content: JSON.parse(atob(r.body.content.replace(/\n/g, ''))), sha: r.body.sha };
+  }
+  return null;
+}
+
+async function putRepoFile(path, obj, sha) {
+  const body = { message: 'update ' + path, content: btoa(unescape(encodeURIComponent(JSON.stringify(obj, null, 1)))) };
+  if (sha) body.sha = sha;
+  const r = await gh('/repos/' + OWNER + '/' + REPO + '/contents/' + path, { method: 'PUT', body: JSON.stringify(body) });
+  return r.status === 200 || r.status === 201;
+}
+
+async function deleteRepoFile(path, sha) {
+  const r = await gh('/repos/' + OWNER + '/' + REPO + '/contents/' + path, {
+    method: 'DELETE',
+    body: JSON.stringify({ message: 'delete ' + path, sha })
+  });
+  return r.status === 200;
+}
+
+async function triggerUpdate() {
+  await gh('/repos/' + OWNER + '/' + REPO + '/actions/workflows/update.yml/dispatches', {
+    method: 'POST', body: JSON.stringify({ ref: 'main' })
+  });
+}
+
+// ===== 登录 =====
+async function doLogin() {
+  const token = document.getElementById('token-input').value.trim();
+  const errBox = document.getElementById('login-error');
+  errBox.style.display = 'none';
+  if (!token) { errBox.textContent = '请输入 GitHub Token'; errBox.style.display = 'block'; return; }
+  try {
+    const res = await fetch(GH_API + '/user', { headers: { 'Authorization': 'Bearer ' + token, 'User-Agent': 'fund' } });
+    if (res.status !== 200) {
+      const j = await res.json();
+      errBox.textContent = 'Token 无效或权限不足：' + (j.message || res.status);
+      errBox.style.display = 'block';
+      return;
+    }
+    const u = await res.json();
+    localStorage.setItem('gh_token', token);
+    localStorage.setItem('gh_user', u.login);
+    toast('✅ 登录成功：' + u.login);
+    startApp();
+  } catch (e) {
+    errBox.textContent = '网络错误：' + e.message;
+    errBox.style.display = 'block';
+  }
+}
+
+function doLogout() {
+  localStorage.removeItem('gh_token');
+  localStorage.removeItem('gh_user');
+  location.reload();
+}
+
+function startApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = 'block';
+  document.getElementById('cur-user').textContent = getUser();
+  document.getElementById('admin-btn').style.display = getUser() === OWNER ? '' : 'none';
+  load();
+}
+
+// ===== 数据加载 =====
+async function load() {
+  try {
+    const res = await fetch(PAGE_URL + '?t=' + Date.now());
+    data = await res.json();
+  } catch (e) {
+    document.getElementById('market-bar').innerHTML = '<div class="tip">数据加载失败</div>';
+    return;
+  }
+  document.getElementById('update-time').textContent = data.updated || '--';
+  const me = data.users.find(u => u.username === getUser());
+  myFunds = (me && me.funds) || [];
+  myStocks = (me && me.stocks) || [];
+  renderMarket();
+  renderFundList();
+  renderStockList();
+  if (myFunds.length) selectFund(myFunds[0].code);
+  if (myStocks.length) { selectedStock = myStocks[0].code; renderStockList(); }
+  renderNews();
+  setInterval(async () => {
+    try {
+      const res = await fetch(PAGE_URL + '?t=' + Date.now());
+      const nd = await res.json();
+      if (nd.updated !== data.updated) { data = nd; document.getElementById('update-time').textContent = data.updated; refreshAll(); }
+    } catch (e) { /* ignore */ }
+  }, 60000);
+}
+
+function refreshAll() {
+  const me = data.users.find(u => u.username === getUser());
+  myFunds = (me && me.funds) || [];
+  myStocks = (me && me.stocks) || [];
+  renderMarket(); renderFundList(); renderStockList();
+  if (selectedFund) { const f = myFunds.find(x => x.code === selectedFund); if (f) selectFund(f.code); }
+  if (selectedStock) { const s = myStocks.find(x => x.code === selectedStock); if (s) drawStockChart(s.kline || []); }
+  renderNews();
+}
+
+// ===== 渲染 =====
+function cls(v) { return v > 0 ? 'up' : (v < 0 ? 'down' : 'flat'); }
+function fmtPct(v) { if (v === undefined || v === null || v === '') return '--'; return (v >= 0 ? '+' : '') + Number(v).toFixed(2) + '%'; }
 
 function switchTab(name, el) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -118,9 +331,6 @@ function switchTab(name, el) {
   if (name === 'fund' && fundChart) fundChart.resize();
   if (name === 'stock' && stockChart) stockChart.resize();
 }
-
-function cls(v) { return v > 0 ? 'up' : (v < 0 ? 'down' : 'flat'); }
-function fmtPct(v) { if (v === undefined || v === null || v === '') return '--'; return (v >= 0 ? '+' : '') + Number(v).toFixed(2) + '%'; }
 
 function renderMarket() {
   const bar = document.getElementById('market-bar');
@@ -134,20 +344,22 @@ function renderMarket() {
 
 function renderFundList() {
   const box = document.getElementById('fund-list');
-  document.getElementById('fund-count').textContent = data.funds.length;
-  box.innerHTML = data.funds.map(f => `<div class="item ${f.code === selectedFund ? 'active' : ''}" onclick="selectFund('${f.code}')">
-    <div class="info"><div class="name">${f.name}</div><div class="code">${f.code}${f.type === 'estimate' ? ' · 估值' : (f.type === 'nav' ? ' · 净值' : '')}</div></div>
+  document.getElementById('fund-count').textContent = myFunds.length;
+  if (!myFunds.length) { box.innerHTML = '<div class="tip">暂无基金，输入代码添加</div>'; return; }
+  box.innerHTML = myFunds.map(f => `<div class="item ${f.code === selectedFund ? 'active' : ''}" onclick="selectFund('${f.code}')">
+    <div class="info"><div class="name">${f.name || f.code}</div><div class="code">${f.code}${f.type === 'estimate' ? ' · 估值' : (f.type === 'nav' ? ' · 净值' : '')}</div></div>
     <div class="val ${cls(Number(f.pct))}">${f.nav || '--'}</div>
     <div class="pct ${cls(Number(f.pct))}">${fmtPct(f.pct)}</div>
+    <button class="del" onclick="event.stopPropagation();delFund('${f.code}')">✕</button>
   </div>`).join('');
 }
 
 function selectFund(code) {
   selectedFund = code;
   renderFundList();
-  const f = data.funds.find(x => x.code === code);
+  const f = myFunds.find(x => x.code === code);
   if (!f) return;
-  document.getElementById('fund-chart-title').textContent = f.name + ' (' + code + ') · 净值走势';
+  document.getElementById('fund-chart-title').textContent = (f.name || code) + ' (' + code + ') · 净值走势';
   drawFundChart(f);
   renderPredict(f);
 }
@@ -175,31 +387,30 @@ function drawFundChart(f) {
     grid: { left: 60, right: 16, top: 16, bottom: 40 },
     xAxis: { type: 'category', data: dates, axisLabel: { color: '#94a3b8', fontSize: 10 } },
     yAxis: { type: 'value', scale: true, axisLabel: { color: '#94a3b8', fontSize: 10 }, splitLine: { lineStyle: { color: '#263449' } } },
-    series: [{
-      type: 'line', data: vals, smooth: true, symbol: 'none',
-      lineStyle: { width: 2, color: '#38bdf8' },
+    series: [{ type: 'line', data: vals, smooth: true, symbol: 'none', lineStyle: { width: 2, color: '#38bdf8' },
       areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(56,189,248,0.3)' }, { offset: 1, color: 'rgba(56,189,248,0.02)' }] } },
-      markLine: f.predict ? { silent: true, symbol: 'none', lineStyle: { type: 'dotted', color: '#f59e0b' }, label: { show: false }, data: [{ yAxis: f.predict.predict_nav }] } : undefined
-    }]
+      markLine: f.predict ? { silent: true, symbol: 'none', lineStyle: { type: 'dotted', color: '#f59e0b' }, label: { show: false }, data: [{ yAxis: f.predict.predict_nav }] } : undefined }]
   }, true);
 }
 
 function renderStockList() {
   const box = document.getElementById('stock-list');
-  document.getElementById('stock-count').textContent = data.stocks.length;
-  box.innerHTML = data.stocks.map(s => `<div class="item ${s.code === selectedStock ? 'active' : ''}" onclick="selectStock('${s.code}')">
-    <div class="info"><div class="name">${s.name}</div><div class="code">${s.code}</div></div>
+  document.getElementById('stock-count').textContent = myStocks.length;
+  if (!myStocks.length) { box.innerHTML = '<div class="tip">暂无股票，输入代码添加</div>'; return; }
+  box.innerHTML = myStocks.map(s => `<div class="item ${s.code === selectedStock ? 'active' : ''}" onclick="selectStock('${s.code}')">
+    <div class="info"><div class="name">${s.name || s.code}</div><div class="code">${s.code}</div></div>
     <div class="val ${cls(Number(s.pct))}">${s.price !== '' && s.price !== undefined ? Number(s.price).toFixed(2) : '--'}</div>
     <div class="pct ${cls(Number(s.pct))}">${fmtPct(s.pct)}</div>
+    <button class="del" onclick="event.stopPropagation();delStock('${s.code}')">✕</button>
   </div>`).join('');
 }
 
 function selectStock(code) {
   selectedStock = code;
   renderStockList();
-  const s = data.stocks.find(x => x.code === code);
+  const s = myStocks.find(x => x.code === code);
   if (!s) return;
-  document.getElementById('stock-chart-title').textContent = s.name + ' (' + code + ') · 日K线';
+  document.getElementById('stock-chart-title').textContent = (s.name || code) + ' (' + code + ') · 日K线';
   drawStockChart(s.kline || []);
 }
 
@@ -215,14 +426,8 @@ function drawStockChart(rows) {
     tooltip: { trigger: 'axis', axisPointer: { type: 'cross' }, formatter: p => { const d = rows[p[0].dataIndex]; return d.date + '<br/>开:' + d.open.toFixed(2) + ' 高:' + d.high.toFixed(2) + '<br/>低:' + d.low.toFixed(2) + ' 收:' + d.close.toFixed(2); } },
     axisPointer: { link: [{ xAxisIndex: 'all' }] },
     grid: [{ left: 60, right: 16, top: 20, height: '55%' }, { left: 60, right: 16, top: '72%', height: '14%' }],
-    xAxis: [
-      { type: 'category', data: dates, axisLabel: { color: '#94a3b8', fontSize: 9 } },
-      { type: 'category', gridIndex: 1, data: dates, axisLabel: { show: false } }
-    ],
-    yAxis: [
-      { scale: true, axisLabel: { color: '#94a3b8', fontSize: 9 }, splitLine: { lineStyle: { color: '#263449' } } },
-      { gridIndex: 1, axisLabel: { show: false }, splitLine: { show: false } }
-    ],
+    xAxis: [{ type: 'category', data: dates, axisLabel: { color: '#94a3b8', fontSize: 9 } }, { type: 'category', gridIndex: 1, data: dates, axisLabel: { show: false } }],
+    yAxis: [{ scale: true, axisLabel: { color: '#94a3b8', fontSize: 9 }, splitLine: { lineStyle: { color: '#263449' } } }, { gridIndex: 1, axisLabel: { show: false }, splitLine: { show: false } }],
     dataZoom: [{ type: 'inside', xAxisIndex: [0, 1], start: 60, end: 100 }],
     series: [
       { type: 'candlestick', data: ohlc, itemStyle: { color: '#ef4444', color0: '#22c55e', borderColor: '#ef4444', borderColor0: '#22c55e' }, barWidth: '65%' },
@@ -250,39 +455,108 @@ function renderNews() {
   }).join('');
 }
 
-async function load() {
-  try {
-    const res = await fetch('data.json?t=' + Date.now());
-    data = await res.json();
-  } catch (e) {
-    document.getElementById('market-bar').innerHTML = '<div class="tip">数据加载失败</div>';
-    return;
-  }
-  document.getElementById('update-time').textContent = data.updated || '--';
-  renderMarket();
-  renderFundList();
-  renderStockList();
-  if (data.funds.length) selectFund(data.funds[0].code);
-  if (data.stocks.length) { selectedStock = data.stocks[0].code; renderStockList(); }
-  renderNews();
-  // 60 秒自动检查数据更新
-  setInterval(async () => {
-    try {
-      const res = await fetch('data.json?t=' + Date.now());
-      const nd = await res.json();
-      if (nd.updated !== data.updated) {
-        data = nd;
-        document.getElementById('update-time').textContent = data.updated;
-        renderMarket(); renderFundList(); renderStockList();
-        if (selectedFund) selectFund(selectedFund);
-        if (selectedStock) { const s = data.stocks.find(x => x.code === selectedStock); if (s) drawStockChart(s.kline || []); }
-        renderNews();
-      }
-    } catch (e) { /* 忽略网络错误 */ }
-  }, 60000);
+// ===== 增删我的基金/股票（写 GitHub 仓库 data/用户名.json） =====
+async function saveMyList() {
+  const user = getUser();
+  let existing = await getRepoFile('data/' + user + '.json');
+  const list = { username: user, funds: myFunds.map(f => ({ code: f.code, name: f.name || '' })), stocks: myStocks.map(s => ({ code: s.code, name: s.name || '' })) };
+  const ok = await putRepoFile('data/' + user + '.json', list, existing ? existing.sha : null);
+  if (!ok) { toast('保存失败（检查 Token 的 repo 权限）', true); return false; }
+  return true;
 }
 
-load();
+async function addFund() {
+  const code = document.getElementById('fund-add').value.trim();
+  if (!/^\d{6}$/.test(code)) { toast('请输入 6 位基金代码', true); return; }
+  if (myFunds.some(f => f.code === code)) { toast('该基金已在列表中', true); return; }
+  myFunds.push({ code, name: code });
+  document.getElementById('fund-add').value = '';
+  renderFundList();
+  if (await saveMyList()) { toast('已添加 ' + code + '，正在刷新数据...'); triggerUpdate(); }
+}
+
+async function delFund(code) {
+  myFunds = myFunds.filter(f => f.code !== code);
+  if (selectedFund === code) selectedFund = null;
+  renderFundList();
+  if (await saveMyList()) { toast('已删除 ' + code + '，正在刷新数据...'); triggerUpdate(); }
+}
+
+async function addStock() {
+  const raw = document.getElementById('stock-add').value.trim().toLowerCase();
+  let code = raw;
+  if (/^\d{6}$/.test(raw)) {
+    code = raw.startsWith('6') ? 'sh' + raw : (raw.startsWith(('0')) || raw.startsWith('3')) ? 'sz' + raw : raw;
+  }
+  if (!/^(sh|sz|bj)\d{6}$/.test(code)) { toast('股票代码无效（如 600519 或 sz000001）', true); return; }
+  if (myStocks.some(s => s.code === code)) { toast('该股票已在列表中', true); return; }
+  myStocks.push({ code, name: code });
+  document.getElementById('stock-add').value = '';
+  renderStockList();
+  if (await saveMyList()) { toast('已添加 ' + code + '，正在刷新数据...'); triggerUpdate(); }
+}
+
+async function delStock(code) {
+  myStocks = myStocks.filter(s => s.code !== code);
+  if (selectedStock === code) selectedStock = null;
+  renderStockList();
+  if (await saveMyList()) { toast('已删除 ' + code + '，正在刷新数据...'); triggerUpdate(); }
+}
+
+async function forceUpdate() {
+  toast('已触发云端更新，约 1-3 分钟完成...');
+  await triggerUpdate();
+}
+
+// ===== 管理员：用户管理 =====
+async function openAdmin() {
+  document.getElementById('admin-modal').style.display = 'flex';
+  const box = document.getElementById('admin-users');
+  box.innerHTML = '<div class="loading">加载中...</div>';
+  try {
+    const r = await gh('/repos/' + OWNER + '/' + REPO + '/contents/data');
+    if (r.status !== 200) { box.innerHTML = '<div class="tip">加载失败（' + r.status + '）</div>'; return; }
+    const files = r.body.filter(x => x.name.endsWith('.json'));
+    if (!files.length) { box.innerHTML = '<div class="tip">暂无用户</div>'; return; }
+    let html = '';
+    for (const f of files) {
+      const fr = await gh('/repos/' + OWNER + '/' + REPO + '/contents/data/' + f.name);
+      let funds = [], stocks = [];
+      if (fr.status === 200) {
+        const c = JSON.parse(atob(fr.body.content.replace(/\n/g, '')));
+        funds = c.funds || []; stocks = c.stocks || [];
+      }
+      const uname = f.name.replace('.json', '');
+      html += `<div class="u-card">
+        <div class="u-head">
+          <span class="u-name">${uname}</span>
+          <button class="btn danger" onclick="delUser('${uname}','${f.name}','${fr.body.sha}')">删除</button>
+        </div>
+        <div class="u-funds">📈 基金(${funds.length})：${funds.map(x => x.code).join('、') || '无'}</div>
+        <div class="u-funds">📊 股票(${stocks.length})：${stocks.map(x => x.code).join('、') || '无'}</div>
+      </div>`;
+    }
+    box.innerHTML = html;
+  } catch (e) {
+    box.innerHTML = '<div class="tip">' + e.message + '</div>';
+  }
+}
+
+function closeAdmin() { document.getElementById('admin-modal').style.display = 'none'; }
+
+async function delUser(uname, fname, sha) {
+  if (!confirm('确定删除用户 ' + uname + ' 吗？将删除其云端列表')) return;
+  const ok = await deleteRepoFile('data/' + fname, sha);
+  if (ok) { toast('已删除用户 ' + uname); openAdmin(); triggerUpdate(); }
+  else toast('删除失败', true);
+}
+
+// ===== 启动 =====
+if (getToken() && getUser()) {
+  startApp();
+} else {
+  document.getElementById('login-screen').style.display = 'flex';
+}
 </script>
 </body>
 </html>
