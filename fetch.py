@@ -1,32 +1,55 @@
 # -*- coding: utf-8 -*-
 """
 云端基金/股票监控数据抓取（GitHub Actions 定时运行）
-生成 docs/data.json，由 GitHub Pages 静态托管，手机随时可访问。
-修改下面的 FUNDS / STOCKS 列表即可更换关注的基金和股票。
+读取 data/*.json（每个文件=一个用户的关注列表），合并抓取，生成 docs/data.json。
+GitHub Pages 静态托管，手机随时可访问。
 """
+import glob
 import json
+import os
 import re
 import urllib.request
 import urllib.parse
 from datetime import datetime, timedelta
 
-# ============ 在这里修改你的关注列表 ============
-FUNDS = [
+# ============ 在这里修改默认关注列表（data/ 目录里每个用户的列表会覆盖） ============
+DEFAULT_FUNDS = [
     {"code": "001480", "name": "财通成长优选混合A"},
     {"code": "014915", "name": "财通匠心优选一年持有混合A"},
 ]
-STOCKS = [
+DEFAULT_STOCKS = [
     {"code": "sz000001", "name": "平安银行"},
     {"code": "sh600519", "name": "贵州茅台"},
     {"code": "sz300750", "name": "宁德时代"},
 ]
-# ==============================================
+# =============================================================================
 
 NEWS_KEYWORDS = [
     "基金", "股市", "A股", "央行", "降息", "加息", "财报", "业绩",
     "IPO", "新能源", "芯片", "AI", "人工智能", "黄金", "美股", "港股",
     "汇率", "GDP", "通胀", "回购", "分红", "证监会", "美联储", "涨停", "跌停",
 ]
+
+
+def load_user_lists():
+    """读取 data/*.json，返回 [{username, funds, stocks}]；仓库主目录的 data.json 除外"""
+    users = []
+    for path in sorted(glob.glob("data/*.json")):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                u = json.load(f)
+            if not isinstance(u, dict) or not u.get("username"):
+                continue
+            users.append({
+                "username": u["username"],
+                "funds": u.get("funds") or [],
+                "stocks": u.get("stocks") or [],
+            })
+        except Exception:
+            continue
+    if not users:
+        users = [{"username": "admin", "funds": DEFAULT_FUNDS, "stocks": DEFAULT_STOCKS}]
+    return users
 
 
 def http_get(url, headers=None, timeout=12, encoding="utf-8"):
@@ -269,19 +292,28 @@ def fetch_news(limit=50):
 
 def main():
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    data = {"updated": now}
+    users = load_user_lists()
 
-    # 基金：估值/净值 + 历史（预测）
-    funds = []
-    codes = [f["code"] for f in FUNDS]
-    vals = fetch_valuations(codes)
-    for f in FUNDS:
-        code = f["code"]
+    # 合并所有用户的基金/股票（去重），一次抓取
+    all_funds = {}
+    for u in users:
+        for f in u["funds"]:
+            all_funds.setdefault(f["code"], {"code": f["code"], "name": f.get("name", f["code"])})
+    all_stocks = {}
+    for u in users:
+        for s in u["stocks"]:
+            all_stocks.setdefault(s["code"], {"code": s["code"], "name": s.get("name", s["code"])})
+
+    fund_codes = list(all_funds.keys())
+    stock_codes = list(all_stocks.keys())
+    vals = fetch_valuations(fund_codes)
+    quotes = fetch_stock_quotes(stock_codes)
+
+    # 抓取每只基金详情（历史+预测）
+    fund_detail = {}
+    for code, meta in all_funds.items():
         v = vals.get(code)
-        item = {
-            "code": code,
-            "name": f.get("name") or (v.get("SHORTNAME") if v else code) or code,
-        }
+        item = {"code": code, "name": meta["name"]}
         if v and (v.get("GSZZL") is not None):
             item.update({"nav": v.get("GSZ") or v.get("DWJZ"), "pct": v.get("GSZZL"),
                          "time": v.get("GSZTIME"), "type": "estimate"})
@@ -298,32 +330,41 @@ def main():
         hist = fetch_fund_history(code)
         item["history"] = hist
         item["predict"] = predict_next_nav(hist)
-        funds.append(item)
-    data["funds"] = funds
+        fund_detail[code] = item
 
-    # 股票
-    stocks = []
-    s_codes = [s["code"] for s in STOCKS]
-    quotes = fetch_stock_quotes(s_codes)
-    for s in STOCKS:
-        q = quotes.get(s["code"])
-        row = {"code": s["code"], "name": s["name"]}
+    # 抓取每只股票详情（K线）
+    stock_detail = {}
+    for code, meta in all_stocks.items():
+        q = quotes.get(code)
+        row = {"code": code, "name": meta["name"]}
         if q:
-            q["name"] = q.get("name") or s["name"]
+            q["name"] = q.get("name") or meta["name"]
             row.update(q)
         else:
             row.update({"price": "", "pct": "", "error": True})
-        row["kline"] = fetch_stock_kline(s["code"])
-        stocks.append(row)
-    data["stocks"] = stocks
+        row["kline"] = fetch_stock_kline(code)
+        stock_detail[code] = row
 
-    # 大盘 + 新闻
-    data["market"] = fetch_market()
-    data["news"] = fetch_news()
+    # 按用户组织数据（每人只含自己的列表）
+    data_users = []
+    for u in users:
+        data_users.append({
+            "username": u["username"],
+            "funds": [fund_detail.get(f["code"]) for f in u["funds"] if f["code"] in fund_detail],
+            "stocks": [stock_detail.get(s["code"]) for s in u["stocks"] if s["code"] in stock_detail],
+        })
+
+    data = {
+        "updated": now,
+        "users": data_users,
+        "market": fetch_market(),
+        "news": fetch_news(),
+    }
 
     with open("docs/data.json", "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False)
-    print("OK updated at", now, "funds:", len(funds), "stocks:", len(stocks),
+    print("OK updated at", now, "users:", len(data_users),
+          "funds:", len(fund_codes), "stocks:", len(stock_codes),
           "news:", len(data["news"]))
 
 
