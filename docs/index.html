@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>基金股票监控（云端版）</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+  .header { padding: 14px 20px; background: #1e293b; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #334155; flex-wrap: wrap; gap: 8px; }
+  .header h1 { font-size: 18px; }
+  .header .meta { font-size: 12px; color: #94a3b8; }
+  .header .meta b { color: #38bdf8; }
+  .market-bar { display: flex; gap: 10px; padding: 12px 20px; flex-wrap: wrap; }
+  .idx-card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 8px 14px; min-width: 130px; flex: 1 1 130px; }
+  .idx-name { font-size: 12px; color: #94a3b8; }
+  .idx-price { font-size: 17px; font-weight: 700; }
+  .idx-change { font-size: 12px; }
+  .up { color: #ef4444; } .down { color: #22c55e; } .flat { color: #94a3b8; }
+  .tabs { display: flex; gap: 8px; padding: 6px 20px; }
+  .tab { padding: 8px 20px; border-radius: 8px 8px 0 0; cursor: pointer; font-size: 14px; font-weight: 600; background: #1e293b; color: #94a3b8; border: 1px solid #334155; border-bottom: none; }
+  .tab.active { background: #0ea5e9; color: #fff; }
+  .container { display: flex; gap: 14px; padding: 0 20px 20px; flex-wrap: wrap; }
+  .chart-panel { flex: 1 1 620px; background: #1e293b; border-radius: 12px; padding: 14px; border: 1px solid #334155; min-width: 300px; }
+  .chart-title { font-size: 14px; margin-bottom: 8px; }
+  #fund-chart, #stock-chart { width: 100%; height: 380px; }
+  .predict-bar { font-size: 12px; padding: 8px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; margin-bottom: 10px; }
+  .predict-bar .tag { color: #f59e0b; font-weight: 700; margin-right: 6px; }
+  .predict-bar b { color: #38bdf8; }
+  .list-panel { flex: 1 1 300px; background: #1e293b; border-radius: 12px; padding: 14px; border: 1px solid #334155; min-width: 260px; }
+  .list-panel h2 { font-size: 14px; margin-bottom: 10px; }
+  .item { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 8px; cursor: pointer; border: 1px solid #334155; margin-bottom: 6px; }
+  .item:hover { background: #273449; }
+  .item.active { border-color: #0ea5e9; background: #273449; }
+  .item .info { flex: 1; min-width: 0; }
+  .item .name { font-size: 13px; }
+  .item .code { font-size: 11px; color: #64748b; }
+  .item .val { text-align: right; font-size: 15px; font-weight: 700; }
+  .item .pct { text-align: right; font-size: 12px; min-width: 58px; }
+  .news-panel { margin-top: 14px; }
+  .news-panel h2 { font-size: 14px; margin-bottom: 10px; }
+  .news-filter { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .news-filter input { flex: 1 1 150px; padding: 5px 10px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; font-size: 12px; outline: none; }
+  .news-list { max-height: 400px; overflow-y: auto; }
+  .news-item { padding: 7px 10px; border-radius: 8px; cursor: pointer; font-size: 12px; line-height: 1.5; color: #cbd5e1; border-bottom: 1px solid #263449; }
+  .news-item:hover { background: #273449; }
+  .news-item.hot { background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.4); }
+  .news-item .t { color: #64748b; margin-right: 6px; font-size: 11px; }
+  .news-item .hot-tag { display: inline-block; background: #f59e0b; color: #0f172a; font-size: 10px; font-weight: 700; border-radius: 4px; padding: 1px 5px; margin-right: 5px; }
+  .news-item .kw-hl { color: #f59e0b; font-weight: 700; }
+  .tip { font-size: 12px; color: #64748b; margin-top: 8px; line-height: 1.6; }
+  .loading { color: #94a3b8; text-align: center; padding: 20px 0; font-size: 13px; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>💰 基金 &amp; 股票 监控（云端）</h1>
+  <div class="meta">数据更新：<b id="update-time">--</b> · 每 15-30 分钟自动刷新</div>
+</div>
+
+<div class="market-bar" id="market-bar"><div class="loading">大盘加载中...</div></div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('fund', this)">📈 基金</div>
+  <div class="tab" onclick="switchTab('stock', this)">📊 股票</div>
+</div>
+
+<div class="tab-panel active" id="panel-fund">
+  <div class="container">
+    <div class="chart-panel">
+      <div class="chart-title" id="fund-chart-title">点击左侧基金查看净值走势</div>
+      <div class="predict-bar" id="predict-bar" style="display:none;"></div>
+      <div id="fund-chart"></div>
+      <div class="news-panel">
+        <h2>📰 财经新闻</h2>
+        <div class="news-filter">
+          <input id="news-kw" type="text" placeholder="关键词筛选（空格分隔）" oninput="renderNews()">
+        </div>
+        <div class="news-list" id="news-list"><div class="loading">加载中...</div></div>
+      </div>
+    </div>
+    <div class="list-panel">
+      <h2>我的基金（<span id="fund-count">0</span>）</h2>
+      <div id="fund-list"><div class="loading">加载中...</div></div>
+      <div class="tip">点击基金查看净值走势 + 明日预测<br>数据更新频率：15-30 分钟（自动）</div>
+    </div>
+  </div>
+</div>
+
+<div class="tab-panel" id="panel-stock">
+  <div class="container">
+    <div class="chart-panel">
+      <div class="chart-title" id="stock-chart-title">点击左侧股票查看日K线</div>
+      <div id="stock-chart"></div>
+    </div>
+    <div class="list-panel">
+      <h2>我的股票（<span id="stock-count">0</span>）</h2>
+      <div id="stock-list"><div class="loading">加载中...</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let data = null;
+let fundChart = null;
+let stockChart = null;
+let selectedFund = null;
+let selectedStock = null;
+
+function switchTab(name, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  if (name === 'fund' && fundChart) fundChart.resize();
+  if (name === 'stock' && stockChart) stockChart.resize();
+}
+
+function cls(v) { return v > 0 ? 'up' : (v < 0 ? 'down' : 'flat'); }
+function fmtPct(v) { if (v === undefined || v === null || v === '') return '--'; return (v >= 0 ? '+' : '') + Number(v).toFixed(2) + '%'; }
+
+function renderMarket() {
+  const bar = document.getElementById('market-bar');
+  if (!data.market || !data.market.length) { bar.innerHTML = '<div class="tip">大盘数据暂不可用</div>'; return; }
+  bar.innerHTML = data.market.map(ix => `<div class="idx-card">
+    <div class="idx-name">${ix.name}</div>
+    <div class="idx-price ${cls(ix.pct)}">${Number(ix.price).toFixed(2)}</div>
+    <div class="idx-change ${cls(ix.pct)}">${fmtPct(ix.pct)}</div>
+  </div>`).join('');
+}
+
+function renderFundList() {
+  const box = document.getElementById('fund-list');
+  document.getElementById('fund-count').textContent = data.funds.length;
+  box.innerHTML = data.funds.map(f => `<div class="item ${f.code === selectedFund ? 'active' : ''}" onclick="selectFund('${f.code}')">
+    <div class="info"><div class="name">${f.name}</div><div class="code">${f.code}${f.type === 'estimate' ? ' · 估值' : (f.type === 'nav' ? ' · 净值' : '')}</div></div>
+    <div class="val ${cls(Number(f.pct))}">${f.nav || '--'}</div>
+    <div class="pct ${cls(Number(f.pct))}">${fmtPct(f.pct)}</div>
+  </div>`).join('');
+}
+
+function selectFund(code) {
+  selectedFund = code;
+  renderFundList();
+  const f = data.funds.find(x => x.code === code);
+  if (!f) return;
+  document.getElementById('fund-chart-title').textContent = f.name + ' (' + code + ') · 净值走势';
+  drawFundChart(f);
+  renderPredict(f);
+}
+
+function renderPredict(f) {
+  const bar = document.getElementById('predict-bar');
+  if (!f.predict) { bar.style.display = 'none'; return; }
+  const p = f.predict;
+  bar.style.display = 'block';
+  bar.innerHTML = `<span class="tag">🔮 明日预测</span>
+    <span>预测净值 <b>${p.predict_nav.toFixed(4)}</b></span>
+    <span class="${cls(p.predict_pct)}">${fmtPct(p.predict_pct)}</span>
+    <span>区间 [${p.interval_low.toFixed(4)}, ${p.interval_high.toFixed(4)}]</span>
+    <span>${p.trend_desc}</span>`;
+}
+
+function drawFundChart(f) {
+  const rows = f.history || [];
+  if (!fundChart) { fundChart = echarts.init(document.getElementById('fund-chart')); window.addEventListener('resize', () => fundChart && fundChart.resize()); }
+  const dates = rows.map(r => r.date);
+  const vals = rows.map(r => r.nav);
+  if (f.predict) { dates.push('预测'); vals.push(f.predict.predict_nav); }
+  fundChart.setOption({
+    tooltip: { trigger: 'axis', formatter: p => { const d = rows[p[0].dataIndex]; return d ? d.date + '<br/>净值: <b>' + d.nav.toFixed(4) + '</b>' : ''; } },
+    grid: { left: 60, right: 16, top: 16, bottom: 40 },
+    xAxis: { type: 'category', data: dates, axisLabel: { color: '#94a3b8', fontSize: 10 } },
+    yAxis: { type: 'value', scale: true, axisLabel: { color: '#94a3b8', fontSize: 10 }, splitLine: { lineStyle: { color: '#263449' } } },
+    series: [{
+      type: 'line', data: vals, smooth: true, symbol: 'none',
+      lineStyle: { width: 2, color: '#38bdf8' },
+      areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(56,189,248,0.3)' }, { offset: 1, color: 'rgba(56,189,248,0.02)' }] } },
+      markLine: f.predict ? { silent: true, symbol: 'none', lineStyle: { type: 'dotted', color: '#f59e0b' }, label: { show: false }, data: [{ yAxis: f.predict.predict_nav }] } : undefined
+    }]
+  }, true);
+}
+
+function renderStockList() {
+  const box = document.getElementById('stock-list');
+  document.getElementById('stock-count').textContent = data.stocks.length;
+  box.innerHTML = data.stocks.map(s => `<div class="item ${s.code === selectedStock ? 'active' : ''}" onclick="selectStock('${s.code}')">
+    <div class="info"><div class="name">${s.name}</div><div class="code">${s.code}</div></div>
+    <div class="val ${cls(Number(s.pct))}">${s.price !== '' && s.price !== undefined ? Number(s.price).toFixed(2) : '--'}</div>
+    <div class="pct ${cls(Number(s.pct))}">${fmtPct(s.pct)}</div>
+  </div>`).join('');
+}
+
+function selectStock(code) {
+  selectedStock = code;
+  renderStockList();
+  const s = data.stocks.find(x => x.code === code);
+  if (!s) return;
+  document.getElementById('stock-chart-title').textContent = s.name + ' (' + code + ') · 日K线';
+  drawStockChart(s.kline || []);
+}
+
+function drawStockChart(rows) {
+  const container = document.getElementById('stock-chart');
+  if (container.offsetParent === null) return;
+  if (!stockChart) { stockChart = echarts.init(container); window.addEventListener('resize', () => stockChart && stockChart.resize()); }
+  if (!rows.length) { stockChart.setOption({}, true); return; }
+  const dates = rows.map(r => r.date);
+  const ohlc = rows.map(r => [r.open, r.close, r.low, r.high]);
+  const vols = rows.map(r => r.volume);
+  stockChart.setOption({
+    tooltip: { trigger: 'axis', axisPointer: { type: 'cross' }, formatter: p => { const d = rows[p[0].dataIndex]; return d.date + '<br/>开:' + d.open.toFixed(2) + ' 高:' + d.high.toFixed(2) + '<br/>低:' + d.low.toFixed(2) + ' 收:' + d.close.toFixed(2); } },
+    axisPointer: { link: [{ xAxisIndex: 'all' }] },
+    grid: [{ left: 60, right: 16, top: 20, height: '55%' }, { left: 60, right: 16, top: '72%', height: '14%' }],
+    xAxis: [
+      { type: 'category', data: dates, axisLabel: { color: '#94a3b8', fontSize: 9 } },
+      { type: 'category', gridIndex: 1, data: dates, axisLabel: { show: false } }
+    ],
+    yAxis: [
+      { scale: true, axisLabel: { color: '#94a3b8', fontSize: 9 }, splitLine: { lineStyle: { color: '#263449' } } },
+      { gridIndex: 1, axisLabel: { show: false }, splitLine: { show: false } }
+    ],
+    dataZoom: [{ type: 'inside', xAxisIndex: [0, 1], start: 60, end: 100 }],
+    series: [
+      { type: 'candlestick', data: ohlc, itemStyle: { color: '#ef4444', color0: '#22c55e', borderColor: '#ef4444', borderColor0: '#22c55e' }, barWidth: '65%' },
+      { type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: vols.map((v, i) => ({ value: v, itemStyle: { color: i > 0 && rows[i].close >= rows[i - 1].close ? 'rgba(239,68,68,0.7)' : 'rgba(34,197,94,0.7)' } })), barWidth: '60%' }
+    ]
+  }, true);
+}
+
+function renderNews() {
+  const list = document.getElementById('news-list');
+  const kw = (document.getElementById('news-kw').value || '').split(/[\s,，]+/).filter(Boolean);
+  let items = data.news || [];
+  if (kw.length) items = items.filter(n => kw.some(k => n.title.toLowerCase().includes(k.toLowerCase())));
+  items = items.slice().sort((a, b) => (b.hit_count || 0) - (a.hit_count || 0));
+  if (!items.length) { list.innerHTML = '<div class="tip">暂无新闻或没有匹配</div>'; return; }
+  let hot = 0;
+  list.innerHTML = items.map(n => {
+    const isHot = n.hit_count > 0 && hot < 3 ? (hot++, true) : false;
+    const hitKws = kw.length ? kw.filter(k => n.title.toLowerCase().includes(k.toLowerCase())) : (n.matched || []);
+    let html = n.title.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    [...hitKws].sort((a, b) => b.length - a.length).forEach(k => { if (k) html = html.split(k).join(`<span class="kw-hl">${k}</span>`); });
+    return `<div class="news-item ${isHot ? 'hot' : ''}" onclick="window.open('${n.url}','_blank')">
+      <span class="t">${n.time}${n.source ? ' · ' + n.source : ''}</span>${isHot ? '<span class="hot-tag">🔥 重点</span>' : ''}${html}
+    </div>`;
+  }).join('');
+}
+
+async function load() {
+  try {
+    const res = await fetch('data.json?t=' + Date.now());
+    data = await res.json();
+  } catch (e) {
+    document.getElementById('market-bar').innerHTML = '<div class="tip">数据加载失败</div>';
+    return;
+  }
+  document.getElementById('update-time').textContent = data.updated || '--';
+  renderMarket();
+  renderFundList();
+  renderStockList();
+  if (data.funds.length) selectFund(data.funds[0].code);
+  if (data.stocks.length) { selectedStock = data.stocks[0].code; renderStockList(); }
+  renderNews();
+  // 60 秒自动检查数据更新
+  setInterval(async () => {
+    try {
+      const res = await fetch('data.json?t=' + Date.now());
+      const nd = await res.json();
+      if (nd.updated !== data.updated) {
+        data = nd;
+        document.getElementById('update-time').textContent = data.updated;
+        renderMarket(); renderFundList(); renderStockList();
+        if (selectedFund) selectFund(selectedFund);
+        if (selectedStock) { const s = data.stocks.find(x => x.code === selectedStock); if (s) drawStockChart(s.kline || []); }
+        renderNews();
+      }
+    } catch (e) { /* 忽略网络错误 */ }
+  }, 60000);
+}
+
+load();
+</script>
+</body>
+</html>
